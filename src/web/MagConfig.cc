@@ -12,7 +12,15 @@
 #include "MagLog.h"
 #include "MagExceptions.h"
 #include "MetaData.h"
-#include <dirent.h>
+#include "magics_windef.h"
+
+#ifndef MAGICS_ON_WINDOWS
+	#include <dirent.h>
+#else
+	#include <direct.h>
+	#include <io.h>
+#endif
+
 #include <cstring>
 #include <Tokenizer.h>
 
@@ -238,7 +246,7 @@ void StyleLibrary::init()
    	for ( auto token = paths.begin(); token != paths.end(); ++token) {
 		string path = magCompare(*token, "ecmwf") ? ecmwf : *token;
 
-
+#ifndef MAGICS_ON_WINDOWS
 	    DIR* dir = opendir(path.c_str());
 	    if ( !dir ) {
 	    	ostringstream error;
@@ -255,6 +263,25 @@ void StyleLibrary::init()
 
 	        entry = readdir(dir);
 	   }
+#else
+		struct _finddata_t fileinfo;
+		intptr_t handle;
+		if ((handle = _findfirst(path.c_str(), &fileinfo)) == -1) {
+			ostringstream error;
+			error << "Trying to open directory " << library << ": " << strerror(errno);
+			throw FailedSystemCall(error.str());
+		}
+		else {
+			do {
+				if((fileinfo.attrib & 16) == 16) { // this is a windows dir
+					if(fileinfo.name[0] != '.') {
+						current_ = fileinfo.name;
+						MagConfigHandler(path + "/" + string(fileinfo.name), *this);
+					}
+				}
+			} while(!_findnext(handle, &fileinfo));
+		}
+#endif
 	}
 
 
